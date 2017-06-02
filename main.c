@@ -46,7 +46,7 @@ _FPOR(0xE7);
 MIAN_ID与IP地址的最后两位对应
 **********/
 
-unsigned char MAIN_ID=3;
+unsigned char MAIN_ID=4;
 #define BOARD_NUM 2 // Number of board
 
 //ooo1234567
@@ -69,7 +69,7 @@ unsigned int temp[BOARD_NUM][8]; // Temperature
  
 
  
-int Tick_40S=0; // 用来记录定时中断次数
+unsigned int Tick_40S=0; // 用来记录定时中断次数
  
 unsigned char work_enable = 0;//采集模块工作使能位
 unsigned char uart2_enable = 0;//串口使能位
@@ -123,18 +123,15 @@ void UART1_Send(unsigned char str[], int len)
 void __attribute__((interrupt,no_auto_psv)) _T6Interrupt(void)  // 0.8s interrupt
 {
 	IFS2bits.T6IF = 0;
+	FAIL = ~FAIL;
 	Tick_40S++;//加一次是0.8s
-	if(Tick_40S>75)
-	{		
-		if(Tick_40S >= 150)
-		{
-		  Nrest=0;
-		  DELAY(1000);
-		  Nrest=1;
-
-		  Tick_40S = 76;
-		  count_rx ++;
-		}
+	if(Tick_40S > 2714) //36min
+	{
+		InitSCI();
+ 		Nrest=0;
+		DELAY(1000);
+		Nrest=1;		
+		Tick_40S = 0;
 	}
 }
 
@@ -170,7 +167,7 @@ void __attribute__((interrupt,no_auto_psv)) _U1RXInterrupt(void)
 		UART_Timeout = 0;
 	}
 	
-	if( (i==16)&&(data[2]==0X03)&&(data[3]==0X04)&&(data[0]='S') )
+	if( (i==16)&&(data[2]==0X03)&&(data[3]==0X04)&&(data[0]=='S') )
 	{	
 		    flag_ascii_or_bin = 'b';
 			work_enable = 1;//握手指令中的ID与箱号一致时，才会开启该采集箱激频拾频
@@ -383,7 +380,7 @@ int main()
     WORK=1;//COMMM1
     STAT=0;
     COMM=0;//COMMM1
-    FAIL=0;
+    FAIL=1;
     Nrest=1;//
 	InitTimer6();  //// Timer6 提供0.8s中断定时
     StartTimer6();
@@ -453,19 +450,7 @@ int main()
  
     UART2_Send("restart",7);
 	while(1)
-	{
-		
-		
-	 if((Tick_40S>49)||(CAN_FLAG==0))
-        {
-        	FAIL=1;
-		}
-		else
-		{
-		    FAIL=0;
-		}
-		
-		
+	{	
 
 		CLRWDT
 		
@@ -481,16 +466,9 @@ int main()
 			U2STAbits.OERR = 0;
         }
 		
-        if(count_rx > 60)
-        {
-           InitSCI();
-           count_rx = 0;
-        }
-		
 		if(work_enable ==1) 
 		{
 		    STAT=1;
-		    COMM=1;
 	 
 			{	CLRWDT
                			
@@ -648,7 +626,7 @@ int main()
 			
 			send_data[s]=  'E';s++;
 			
-			if((flag_ascii_or_bin == 'a')||(flag_ascii_or_bin == 'b')) 
+			if(flag_ascii_or_bin == 'a') 
 			{
 				for(p = 0;p < s;p ++)
 				{
@@ -681,7 +659,8 @@ int main()
 			}
 
 			STAT=0;	
-            COMM=0;		
+            
+			COMM = ~COMM;		
  	
 			work_enable = 0;
 			uart2_enable =0;
